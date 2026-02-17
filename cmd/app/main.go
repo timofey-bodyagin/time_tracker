@@ -18,22 +18,5 @@ func main() {
 	forms.OnStop = service.Stop
 	service.StartRefresh()
 	
-	// rows, err := db.Query("SELECT * FROM tmp")
-    // if err != nil {
-    //     log.Fatal(err)
-    // }
-    // defer rows.Close()
-    // // Loop through rows, using Scan to assign column data to struct fields.
-    // for rows.Next() {
-    //     var id int
-    //     if err := rows.Scan(&id); err != nil {
-    //         log.Fatal(err)
-    //     }
-    //     labelsContainer.Add(widget.NewLabel(strconv.Itoa(id)))
-    // }
-    // if err := rows.Err(); err != nil {
-    //     log.Fatal(err)
-    // }
-
 	w.ShowAndRun()
 }

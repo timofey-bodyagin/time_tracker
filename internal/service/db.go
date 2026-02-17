@@ -71,7 +71,7 @@ func getMinutesToday() int {
 	rows, err := db.Query(`
 		select coalesce(sum((unixepoch(coalesce(a.finish, CURRENT_TIMESTAMP)) - unixepoch(a.start)))/60, 0) t
 		from actions a
-		where date(a.start) = date(CURRENT_TIMESTAMP)
+		where date(a.start, 'localtime') = date(CURRENT_TIMESTAMP, 'localtime')
 	`)
     if err != nil {
         log.Fatal(err)
