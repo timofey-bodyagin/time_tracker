@@ -1,0 +1,1 @@
+fyne package -src ./cmd/app --exe ../../dist/tracker.exe
