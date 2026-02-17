@@ -46,7 +46,7 @@ func SaveStart(t time.Time, name, descr string) {
 
 func getActiveJob() (string, int) {
 	rows, err := db.Query(`
-		select name, (unixepoch(CURRENT_TIMESTAMP) - unixepoch(start))/60 t
+		select name, coalesce((unixepoch(CURRENT_TIMESTAMP) - unixepoch(start))/60, 0) t
 		from actions where finish is null
 	`)
     if err != nil {
@@ -69,7 +69,7 @@ func getActiveJob() (string, int) {
 
 func getMinutesToday() int {
 	rows, err := db.Query(`
-		select sum((unixepoch(coalesce(a.finish, CURRENT_TIMESTAMP)) - unixepoch(a.start)))/60 t
+		select coalesce(sum((unixepoch(coalesce(a.finish, CURRENT_TIMESTAMP)) - unixepoch(a.start)))/60, 0) t
 		from actions a
 		where date(a.start) = date(CURRENT_TIMESTAMP)
 	`)
