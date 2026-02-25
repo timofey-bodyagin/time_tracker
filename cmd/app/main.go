@@ -10,13 +10,10 @@ import (
 )
 
 func main() {
-	service.InitDb()
-
+	defer service.LogFile.Close()
 	a := app.New()
 	w := forms.InitMainForm(a)
-	forms.OnStart = service.Start
-	forms.OnStop = service.Stop
-	service.StartRefresh()
-	
+	service.Init(forms.OnRefresh)
+
 	w.ShowAndRun()
 }
