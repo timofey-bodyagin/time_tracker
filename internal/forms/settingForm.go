@@ -17,16 +17,15 @@ const (
 )
 
 func showSettingsForm(w fyne.Window) {
-	itemContainer := container.NewAdaptiveGrid(2)
+	form := &widget.Form{}
 	var values = []binding.String{}
 	for i, item := range service.SettingsRows {
 		values = append(values, binding.NewString())
 		values[i].Set(item.Val)
-		itemContainer.Add(widget.NewLabel(item.Ident))
-		entry := widget.NewEntryWithData(values[i])
-		itemContainer.Add(entry)
+		form.Append(item.Ident, NewFixedWidthEntry(values[i], 400))
 	}
-	mainContainer := container.NewPadded(itemContainer)
+	
+	mainContainer := container.NewPadded(form)
 	dialog.ShowCustomConfirm(title, okButtonText, cancelButtonText, mainContainer, func(b bool) {onClose(b, values)}, w)
 }
 

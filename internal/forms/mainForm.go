@@ -35,7 +35,7 @@ var lastJobButton *widget.Button
 
 func InitMainForm(a fyne.App) fyne.Window {
 	w := a.NewWindow("Тайм-трекер")
-	w.Resize(fyne.NewSize(400, 100))
+	w.Resize(fyne.NewSize(650, 100))
 	w.SetMaster()
 
 	initRecentUsedContainer()

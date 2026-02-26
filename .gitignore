@@ -11,3 +11,4 @@ run
 .basement
 config.local.js
 basement_dist
+app.log
