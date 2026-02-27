@@ -2,6 +2,7 @@ package service
 
 import (
 	"log"
+	"strings"
 	"time"
 )
 
@@ -46,7 +47,7 @@ func refresh(callback func(RefreshData)) {
 	var data RefreshData
 	n, t := getActiveJob()
 	if n != "" {
-		data.CurrentJob = n
+		data.CurrentJob = strings.TrimSpace(n)
 		data.CurrentTime = t
 	}
 	data.DayTime = getMinutesToday()

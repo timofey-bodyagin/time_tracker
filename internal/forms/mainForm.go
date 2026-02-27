@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"sort"
+	"strings"
 	"time"
+	"tracker/internal/graphql"
 	_ "tracker/internal/graphql"
 	"tracker/internal/service"
 
@@ -16,38 +19,43 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-const currentJobHeader = "Активная задача:"
-const currentTimeHeader = "Время:"
-const dayTimeHeader = "Время за день:"
-const stopButtonText = "\n Стоп \n"
-const startButtonText = "Старт"
-const jobPlaceHolder = "Задача"
-const fmtMinutes = "%d мин"
+const (
+	currentJobHeader  = "Активная задача:"
+	currentTimeHeader = "Время:"
+	dayTimeHeader     = "Время за день:"
+	stopButtonText    = "\n Стоп \n"
+	startButtonText   = "Старт"
+	jobPlaceHolder    = "Задача"
+	fmtMinutes        = "%d мин"
+	maxCountLastItems = 5
+)
 
-var currentJob = binding.NewString()
-var currentTime = binding.NewString()
-var dayTime = binding.NewString()
-var startJobValue = binding.NewString()
-var recentUsedContainer *fyne.Container
-var startJobEdit *widget.Entry
-var errorPopup *widget.PopUp
-var lastJobButton *widget.Button
+var (
+	currentJob          = graphql.IssueInfo{}
+	currentJobLabel     = widget.NewLabel("")
+	currentTimeLabel    = widget.NewLabel("")
+	dayTimeLabel        = widget.NewLabel("")
+	startJobValue       = binding.NewString()
+	recentUsedContainer *fyne.Container
+	startJobEdit        *widget.Entry
+	errorPopup          *widget.PopUp
+	lastItemsArray      = []LastItem{}
+	lastItemsContainer  = container.NewVBox()
+)
 
 func InitMainForm(a fyne.App) fyne.Window {
 	w := a.NewWindow("Тайм-трекер")
 	w.Resize(fyne.NewSize(650, 100))
 	w.SetMaster()
 
+	currentJobLabel.Wrapping = fyne.TextWrapWord
+
 	initRecentUsedContainer()
 
-	infoContainer := container.NewAdaptiveGrid(2,
-		widget.NewLabel(currentJobHeader),
-		widget.NewLabelWithData(currentJob),
-		widget.NewLabel(currentTimeHeader),
-		widget.NewLabelWithData(currentTime),
-		widget.NewLabel(dayTimeHeader),
-		widget.NewLabelWithData(dayTime),
-	)
+	infoContainer := &widget.Form{}
+	infoContainer.Append(currentJobHeader, currentJobLabel)
+	infoContainer.Append(currentTimeHeader, currentTimeLabel)
+	infoContainer.Append(dayTimeHeader, dayTimeLabel)
 
 	errorPopup = widget.NewPopUp(widget.NewLabel("Необходимо заполнить поле"), w.Canvas())
 
@@ -68,6 +76,7 @@ func InitMainForm(a fyne.App) fyne.Window {
 			startContainer,
 			widget.NewSeparator(),
 			recentUsedContainer,
+			lastItemsContainer,
 			widget.NewSeparator(),
 			stopContainer,
 			widget.NewSeparator(),
@@ -83,14 +92,20 @@ func InitMainForm(a fyne.App) fyne.Window {
 	return w
 }
 
-func OnRefresh (data service.RefreshData) {
-	currentJob.Set(data.CurrentJob)
-	if data.CurrentJob == "" {
-		currentTime.Set("")
-	} else {
-		currentTime.Set(fmt.Sprintf(fmtMinutes, data.CurrentTime))
+func OnRefresh(data service.RefreshData) {
+	if currentJob.Iid != data.CurrentJob {
+		if isNumeric(data.CurrentJob) {
+			currentJob = graphql.GetIssueInfo(data.CurrentJob)
+		}
+		currentJob.Iid = data.CurrentJob
+		currentJobLabel.SetText(currentJob.Str())
 	}
-	dayTime.Set(fmt.Sprintf(fmtMinutes, data.DayTime))
+	if currentJob.Iid == "" {
+		currentTimeLabel.SetText("")
+	} else {
+		currentTimeLabel.SetText(fmt.Sprintf(fmtMinutes, data.CurrentTime))
+	}
+	dayTimeLabel.SetText(fmt.Sprintf(fmtMinutes, data.DayTime))
 }
 
 func initToolbar(a fyne.App, w fyne.Window) *widget.Toolbar {
@@ -100,7 +115,7 @@ func initToolbar(a fyne.App, w fyne.Window) *widget.Toolbar {
 		} else {
 			ReportWindow.RequestFocus()
 		}
-		
+
 	})
 	settingAction := widget.NewToolbarAction(theme.SettingsIcon(), func() {
 		showSettingsForm(w)
@@ -123,18 +138,25 @@ func startCustom() {
 
 func start(name string) {
 	updateLastJobButton()
-	currentJob.Set(name)
-	currentTime.Set(fmt.Sprintf(fmtMinutes, 0))
+	currentJob = graphql.GetIssueInfo(name)
+	currentJob.Iid = strings.TrimSpace(name)
+	currentJobLabel.SetText(currentJob.Str())
+	currentTimeLabel.SetText(fmt.Sprintf(fmtMinutes, 0))
 	startJobValue.Set("")
 	currTime := time.Now()
 	service.SaveFinish(currTime)
 	service.SaveStart(currTime, name, "")
+	lastItemsArray = slices.DeleteFunc(lastItemsArray, func(item LastItem) bool {
+		return item.info.Iid == name
+	})
+	refreshLastItemsContainer()
 }
 
 func stop() {
 	updateLastJobButton()
-	currentJob.Set("")
-	currentTime.Set("")
+	currentJob = graphql.IssueInfo{}
+	currentJobLabel.SetText("")
+	currentTimeLabel.SetText("")
 	service.SaveFinish(time.Now())
 }
 
@@ -149,24 +171,61 @@ func initRecentUsedContainer() {
 }
 
 func updateLastJobButton() {
-	txt, _ := currentJob.Get()
-	if txt != "" && !slices.Contains(service.Settings.RecentItems, txt) {
-		if lastJobButton == nil {
-			lastJobButton = widget.NewButton(txt, func() {
-				start(txt)
-			})
-			recentUsedContainer.Add(lastJobButton)
-		} else {
-			lastJobButton.Text = txt
-			lastJobButton.OnTapped = func() {
-				start(txt)
-			}
-			lastJobButton.Refresh()
+	if currentJob.Iid == "" || slices.Contains(service.Settings.RecentItems, currentJob.Iid) {
+		return
+	}
+
+	contains := false
+	oldestItemIndex := 0
+	t := time.Now()
+
+	for i, item := range lastItemsArray {
+		if item.info.Iid == currentJob.Iid {
+			contains = true
+			lastItemsArray[i].t = time.Now()
 		}
+		if item.t.Before(t) {
+			oldestItemIndex = i
+			t = item.t
+		}
+	}
+
+	if !contains {
+		id := currentJob.Iid
+		label := widget.NewLabel(currentJob.Str())
+		label.Wrapping = fyne.TextWrapWord
+		label.Alignment = fyne.TextAlignCenter
+
+		button := widget.NewButton("", func() {
+			start(id)
+		})
+		content := container.NewStack(button, label)
+
+		lastItem := LastItem{
+			t:      time.Now(),
+			info:   currentJob,
+			button: content,
+		}
+
+		if len(lastItemsArray) == maxCountLastItems {
+			lastItemsArray[oldestItemIndex] = lastItem
+		} else {
+			lastItemsArray = append(lastItemsArray, lastItem)
+		}
+	}
+	refreshLastItemsContainer()
+}
+
+func refreshLastItemsContainer() {
+	sort.Slice(lastItemsArray, func(i, j int) bool {
+		return lastItemsArray[i].t.After(lastItemsArray[j].t)
+	})
+	lastItemsContainer.RemoveAll()
+	for _, item := range lastItemsArray {
+		lastItemsContainer.Add(item.button)
 	}
 }
 
 func init() {
 	log.Println("Init mainForm")
 }
-
