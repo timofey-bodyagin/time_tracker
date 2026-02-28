@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -50,11 +51,15 @@ func showReportWindow(a fyne.App) {
 }
 
 func sendToGitlab(issue string, minutes int, date string) {
-	graphql.AddSpendTime(issue, minutes, date)
+	err := graphql.AddSpendTime(issue, minutes, date)
+	if err != nil {
+		dialog.ShowError(err, ReportWindow)
+		return
+	}
 	
 	dt, err := time.Parse("2006-01-02", date)
 	if err != nil {
-		log.Println("Error parsing date:", err)
+		dialog.ShowError(err, ReportWindow)
 		return
 	}
 	service.SetRegistered(issue, dt)

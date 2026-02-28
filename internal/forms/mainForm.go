@@ -3,6 +3,7 @@ package forms
 import (
 	// "errors"
 	"fmt"
+	"image/color"
 	"log"
 	"slices"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"tracker/internal/service"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/theme"
@@ -41,6 +43,8 @@ var (
 	errorPopup          *widget.PopUp
 	lastItemsArray      = []LastItem{}
 	lastItemsContainer  = container.NewVBox()
+	errorLabel 			= widget.NewLabel("")
+	errorContainer		= initErrorContainer()
 )
 
 func InitMainForm(a fyne.App) fyne.Window {
@@ -83,7 +87,7 @@ func InitMainForm(a fyne.App) fyne.Window {
 		))
 	w.SetContent(container.NewBorder(
 		initToolbar(a, w),
-		nil,
+		errorContainer,
 		nil,
 		nil,
 		mainContainer,
@@ -95,7 +99,7 @@ func InitMainForm(a fyne.App) fyne.Window {
 func OnRefresh(data service.RefreshData) {
 	if currentJob.Iid != data.CurrentJob {
 		if isNumeric(data.CurrentJob) {
-			currentJob = graphql.GetIssueInfo(data.CurrentJob)
+			currentJob = getIssueInfo(data.CurrentJob)
 		}
 		currentJob.Iid = data.CurrentJob
 		currentJobLabel.SetText(currentJob.Str())
@@ -138,14 +142,14 @@ func startCustom() {
 
 func start(name string) {
 	updateLastJobButton()
-	currentJob = graphql.GetIssueInfo(name)
+	currentJob = getIssueInfo(name)
 	currentJob.Iid = strings.TrimSpace(name)
 	currentJobLabel.SetText(currentJob.Str())
 	currentTimeLabel.SetText(fmt.Sprintf(fmtMinutes, 0))
 	startJobValue.Set("")
 	currTime := time.Now()
 	service.SaveFinish(currTime)
-	service.SaveStart(currTime, name, "")
+	service.SaveStart(currTime, currentJob.Iid, currentJob.Name)
 	lastItemsArray = slices.DeleteFunc(lastItemsArray, func(item LastItem) bool {
 		return item.info.Iid == name
 	})
@@ -224,6 +228,36 @@ func refreshLastItemsContainer() {
 	for _, item := range lastItemsArray {
 		lastItemsContainer.Add(item.button)
 	}
+}
+
+func initErrorContainer() *fyne.Container {
+	bgColor := canvas.NewRectangle(color.RGBA{R: 200, G: 100, B: 100, A: 255})
+	container := container.NewStack(
+		bgColor,
+		errorLabel,
+	)
+	container.Hide()
+	return container
+}
+
+func showError(err error) {
+	errorLabel.SetText(fmt.Sprintf("Ошибка: %s", err))
+	errorContainer.Show()
+}
+
+func hideError() {
+	errorContainer.Hide()
+}
+
+func getIssueInfo(id string) graphql.IssueInfo {
+	info, err := graphql.GetIssueInfo(id)
+	fmt.Println(err)
+	if err == nil {
+		hideError()
+	} else {
+		showError(err)
+	}
+	return info
 }
 
 func init() {

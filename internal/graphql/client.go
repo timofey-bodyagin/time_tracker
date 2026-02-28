@@ -19,25 +19,31 @@ func init() {
 	log.Println("Init client")
 }
 
-func GetIssueInfo(issue string) IssueInfo {
+func GetIssueInfo(issue string) (IssueInfo, error) {
 	query := &gitlab.GraphQLQuery{Query: fmt.Sprintf(issueInfoQuery, issue)}
 	var resp IssueInfoResponse
 	_, err := git.GraphQL.Do(*query, &resp)
 	if err != nil {
-		log.Fatal(err)
+		return IssueInfo{}, err
 	}
 	if len(resp.Data.Project.WorkItems.Nodes) > 0 {
-		return resp.Data.Project.WorkItems.Nodes[0]
+		return resp.Data.Project.WorkItems.Nodes[0], nil
 	}
-	return IssueInfo{}
+	return IssueInfo{}, nil
 }
 
-func AddSpendTime(issue string, minutes int, date string) {
-	info := GetIssueInfo(issue)
+func AddSpendTime(issue string, minutes int, date string) error {
+	info, err := GetIssueInfo(issue)
+	if err != nil {
+		return err
+	}
 	if (IssueInfo{}) == info  {
-		info = GetIssueInfo(service.Settings.OtherIssue)
+		info, err = GetIssueInfo(service.Settings.OtherIssue)
+		if err != nil {
+			return err
+		}
 		if (IssueInfo{}) == info  {
-			return
+			return nil
 		}
 	}
 	input := WorkItemInput{
@@ -54,11 +60,12 @@ func AddSpendTime(issue string, minutes int, date string) {
 		Variables: map[string]any{"input": input},
 	}
 	var resp ErrorsResponse
-	_, err := git.GraphQL.Do(*query, &resp)
+	_, err = git.GraphQL.Do(*query, &resp)
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(resp)
+	return nil
 }
 
 var s =
